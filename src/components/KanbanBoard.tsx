@@ -8,7 +8,6 @@ import {
   Project,
   ActivityLogItem,
   ExtractedTaskCandidate,
-  Priority,
 } from '@/types/kanban';
 import Sidebar from '@/components/Sidebar';
 import KanbanColumn from '@/components/KanbanColumn';
@@ -29,6 +28,8 @@ import {
   History,
   Trash2,
   Download,
+  Cloud,
+  CloudOff,
 } from 'lucide-react';
 
 const TEAM_MEMBERS = [
@@ -84,7 +85,7 @@ const DEFAULT_TASKS: Task[] = [
     description: 'Preparar términos del servicio y enviar cotización revisada.',
     assignee: 'Daniela Medina',
     priority: 'urgent',
-    dueDate: '2026-10-20', // Vence hoy
+    dueDate: '2026-10-20',
     columnId: 'backlog',
     tags: ['Comercial', 'Seguimiento'],
     subtasks: [
@@ -101,7 +102,7 @@ const DEFAULT_TASKS: Task[] = [
     description: 'Revisión general de avances de la semana.',
     assignee: 'Ricardo Pulgar',
     priority: 'medium',
-    dueDate: '2026-10-18', // Vencida
+    dueDate: '2026-10-18',
     columnId: 'done',
     tags: ['Liderazgo'],
     meetingReference: 'Sincronización',
@@ -120,6 +121,7 @@ export default function KanbanBoard() {
   const [columns] = useState<Column[]>(DEFAULT_COLUMNS);
   const [tasks, setTasks] = useState<Task[]>(DEFAULT_TASKS);
   const [activeAssignee, setActiveAssignee] = useState<string>(TEAM_MEMBERS[2]);
+  const [isCloudSync, setIsCloudSync] = useState(false);
 
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([
     {
@@ -141,25 +143,49 @@ export default function KanbanBoard() {
   const [selectedPriorityFilter, setSelectedPriorityFilter] = useState<string>('all');
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Cargar datos: primero intentar la base de datos en la nube; si no, fallback a local
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.tasks) setTasks(parsed.tasks);
-        if (parsed.projects) setProjects(parsed.projects);
-        if (parsed.activityLogs) setActivityLogs(parsed.activityLogs);
-        if (parsed.activeProjectId) setActiveProjectId(parsed.activeProjectId);
-        if (parsed.activeAssignee) setActiveAssignee(parsed.activeAssignee);
+    async function initData() {
+      try {
+        const res = await fetch('/api/sync', { cache: 'no-store' });
+        const cloudData = await res.json();
+
+        if (cloudData.hasDatabase && cloudData.projects?.length > 0) {
+          setIsCloudSync(true);
+          setProjects(cloudData.projects);
+          setActiveProjectId(cloudData.projects[0].id);
+          if (cloudData.tasks) setTasks(cloudData.tasks);
+          if (cloudData.activityLogs) setActivityLogs(cloudData.activityLogs);
+          setIsLoaded(true);
+          return;
+        }
+      } catch (err) {
+        console.warn('Operando sin conexión a base de datos:', err);
       }
-      const savedKey = localStorage.getItem(API_KEY_STORAGE);
-      if (savedKey) setApiKey(savedKey);
-    } catch (e) {
-      console.error('Error restaurando estado:', e);
+
+      // Fallback a localStorage
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.tasks) setTasks(parsed.tasks);
+          if (parsed.projects) setProjects(parsed.projects);
+          if (parsed.activityLogs) setActivityLogs(parsed.activityLogs);
+          if (parsed.activeProjectId) setActiveProjectId(parsed.activeProjectId);
+          if (parsed.activeAssignee) setActiveAssignee(parsed.activeAssignee);
+        }
+        const savedKey = localStorage.getItem(API_KEY_STORAGE);
+        if (savedKey) setApiKey(savedKey);
+      } catch (e) {
+        console.error('Error restaurando estado local:', e);
+      }
+      setIsLoaded(true);
     }
-    setIsLoaded(true);
+
+    initData();
   }, []);
 
+  // Persistir en localStorage como backup
   useEffect(() => {
     if (isLoaded) {
       localStorage.setItem(
@@ -180,7 +206,7 @@ export default function KanbanBoard() {
     localStorage.setItem(API_KEY_STORAGE, key);
   };
 
-  const addLog = (
+  const addLog = async (
     action: ActivityLogItem['action'],
     params: {
       taskTitle?: string;
@@ -201,9 +227,21 @@ export default function KanbanBoard() {
       timestamp: new Date().toISOString(),
     };
     setActivityLogs((prev) => [newLog, ...prev]);
+
+    if (isCloudSync) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'ADD_LOG', payload: newLog }),
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
-  const handleAddProject = () => {
+  const handleAddProject = async () => {
     const name = prompt('Nombre del nuevo proyecto / cliente:');
     if (!name || !name.trim()) return;
 
@@ -216,9 +254,25 @@ export default function KanbanBoard() {
 
     setProjects((prev) => [...prev, newProj]);
     setActiveProjectId(newProj.id);
+
+    if (isCloudSync) {
+      try {
+        const res = await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'CREATE_PROJECT', payload: newProj }),
+        });
+        const data = await res.json();
+        if (data.project?.id) {
+          setActiveProjectId(data.project.id);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
-  const handleDeleteProject = (projId: string, projName: string) => {
+  const handleDeleteProject = async (projId: string, projName: string) => {
     if (projects.length <= 1) {
       alert('Debes tener al menos un proyecto activo en el espacio de trabajo.');
       return;
@@ -239,9 +293,21 @@ export default function KanbanBoard() {
     }
 
     addLog('PROJECT_DELETED', { taskTitle: `Proyecto "${projName}" eliminado` });
+
+    if (isCloudSync) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'DELETE_PROJECT', payload: { projectId: projId } }),
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
-  const onDragEnd = (result: DropResult) => {
+  const onDragEnd = async (result: DropResult) => {
     const { destination, source, draggableId } = result;
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
@@ -274,21 +340,60 @@ export default function KanbanBoard() {
       fromColumn: sourceCol,
       toColumn: destCol,
     });
+
+    if (isCloudSync) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'MOVE_TASK',
+            payload: { taskId: draggableId, columnId: destination.droppableId },
+          }),
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
-  const handleDeleteTask = (taskId: string) => {
+  const handleDeleteTask = async (taskId: string) => {
     const taskToDelete = tasks.find((t) => t.id === taskId);
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     if (taskToDelete) {
       addLog('DELETED', { taskTitle: taskToDelete.title });
     }
+
+    if (isCloudSync) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'DELETE_TASK', payload: { taskId } }),
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
-  const handleUpdateTask = (updatedTask: Task) => {
+  const handleUpdateTask = async (updatedTask: Task) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))
     );
     addLog('UPDATED', { taskTitle: updatedTask.title });
+
+    if (isCloudSync) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'UPDATE_TASK', payload: { taskId: updatedTask.id, ...updatedTask } }),
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
   const handleUpdateTaskColumn = (taskId: string, newColId: string) => {
@@ -315,7 +420,7 @@ export default function KanbanBoard() {
     );
   };
 
-  const handleQuickAddTask = (columnId: string) => {
+  const handleQuickAddTask = async (columnId: string) => {
     const title = prompt('Título de la tarea:');
     if (!title || !title.trim()) return;
 
@@ -333,9 +438,21 @@ export default function KanbanBoard() {
 
     setTasks((prev) => [newTask, ...prev]);
     addLog('CREATED', { taskTitle: newTask.title });
+
+    if (isCloudSync) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'CREATE_TASK', payload: newTask }),
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
-  const handleAddTasksFromMeeting = (
+  const handleAddTasksFromMeeting = async (
     candidates: ExtractedTaskCandidate[],
     meetingTitle: string
   ) => {
@@ -360,6 +477,21 @@ export default function KanbanBoard() {
 
     setTasks((prev) => [...newTasks, ...prev]);
     addLog('MEETING_INGESTED', { meetingTitle });
+
+    if (isCloudSync) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'INGEST_MEETING_TASKS',
+            payload: { projectId: activeProjectId, meetingTitle, tasks: candidates },
+          }),
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
   const currentProject = projects.find((p) => p.id === activeProjectId) || projects[0];
@@ -438,8 +570,29 @@ export default function KanbanBoard() {
               </div>
             </div>
 
-            {/* Acciones Principales: Exportar CSV + Cargar Notas */}
+            {/* Acciones Principales: Cloud Badge + Exportar CSV + Cargar Notas */}
             <div className="flex items-center gap-2.5">
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border ${
+                  isCloudSync
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-50 text-slate-500 border-slate-200'
+                }`}
+                title={isCloudSync ? 'Sincronizado con Neon Postgres en tiempo real' : 'Operando en almacenamiento local'}
+              >
+                {isCloudSync ? (
+                  <>
+                    <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Nube Sincronizada</span>
+                  </>
+                ) : (
+                  <>
+                    <CloudOff className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Modo Local</span>
+                  </>
+                )}
+              </div>
+
               <button
                 onClick={handleExportCSV}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer"

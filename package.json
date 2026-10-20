@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && prisma db push --accept-data-loss && next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -12,9 +12,12 @@
     "@google/genai": "^2.30.0",
     "@google/generative-ai": "^0.24.1",
     "@hello-pangea/dnd": "^18.0.1",
+    "@neondatabase/serverless": "^1.2.0",
+    "@prisma/client": "6.4.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.59.0",
     "next": "16.4.2",
+    "prisma": "6.4.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "tailwind-merge": "^3.7.0"
