@@ -22,7 +22,7 @@ export interface ActivityLogItem {
   userName: string;
   projectId?: string;
   projectName?: string;
-  action: 'CREATED' | 'MOVED' | 'DELETED' | 'MEETING_INGESTED';
+  action: 'CREATED' | 'MOVED' | 'DELETED' | 'MEETING_INGESTED' | 'PROJECT_DELETED' | 'UPDATED';
   taskTitle?: string;
   fromColumn?: string;
   toColumn?: string;

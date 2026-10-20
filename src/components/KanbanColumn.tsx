@@ -11,6 +11,7 @@ interface KanbanColumnProps {
   tasks: Task[];
   onDeleteTask: (taskId: string) => void;
   onQuickAddTask: (columnId: string) => void;
+  onClickTask?: (task: Task) => void;
 }
 
 export default function KanbanColumn({
@@ -18,6 +19,7 @@ export default function KanbanColumn({
   tasks,
   onDeleteTask,
   onQuickAddTask,
+  onClickTask,
 }: KanbanColumnProps) {
   return (
     <div className="flex flex-col w-80 flex-shrink-0 bg-slate-100/90 border border-slate-200/90 rounded-2xl p-4 shadow-xs">
@@ -35,7 +37,7 @@ export default function KanbanColumn({
 
         <button
           onClick={() => onQuickAddTask(column.id)}
-          className="text-slate-400 hover:text-slate-700 p-1 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200 shadow-xs"
+          className="text-slate-400 hover:text-slate-700 p-1 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200 shadow-xs cursor-pointer"
           title="Agregar tarea rápida"
         >
           <Plus className="w-4 h-4" />
@@ -58,6 +60,7 @@ export default function KanbanColumn({
                 task={task}
                 index={index}
                 onDeleteTask={onDeleteTask}
+                onClickTask={onClickTask}
               />
             ))}
             {provided.placeholder}

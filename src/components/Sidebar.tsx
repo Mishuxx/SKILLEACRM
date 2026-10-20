@@ -9,6 +9,7 @@ import {
   Users,
   History,
   Plus,
+  Trash2,
   ChevronRight,
   Sparkles,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ interface SidebarProps {
   activeProjectId: string;
   onSelectProject: (id: string) => void;
   onAddProject: () => void;
+  onDeleteProject: (id: string, name: string) => void;
   activeTab: 'kanban' | 'list' | 'team' | 'history';
   onSelectTab: (tab: 'kanban' | 'list' | 'team' | 'history') => void;
   teamMembers: string[];
@@ -31,6 +33,7 @@ export default function Sidebar({
   activeProjectId,
   onSelectProject,
   onAddProject,
+  onDeleteProject,
   activeTab,
   onSelectTab,
   teamMembers,
@@ -75,7 +78,7 @@ export default function Sidebar({
           <nav className="space-y-0.5">
             <button
               onClick={() => onSelectTab('kanban')}
-              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === 'kanban'
                   ? 'bg-indigo-100/70 text-indigo-900 font-semibold shadow-2xs'
                   : 'text-slate-600 hover:bg-slate-200/50 hover:text-slate-900'
@@ -87,7 +90,7 @@ export default function Sidebar({
 
             <button
               onClick={() => onSelectTab('list')}
-              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === 'list'
                   ? 'bg-indigo-100/70 text-indigo-900 font-semibold shadow-2xs'
                   : 'text-slate-600 hover:bg-slate-200/50 hover:text-slate-900'
@@ -99,7 +102,7 @@ export default function Sidebar({
 
             <button
               onClick={() => onSelectTab('team')}
-              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === 'team'
                   ? 'bg-indigo-100/70 text-indigo-900 font-semibold shadow-2xs'
                   : 'text-slate-600 hover:bg-slate-200/50 hover:text-slate-900'
@@ -111,7 +114,7 @@ export default function Sidebar({
 
             <button
               onClick={() => onSelectTab('history')}
-              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === 'history'
                   ? 'bg-indigo-100/70 text-indigo-900 font-semibold shadow-2xs'
                   : 'text-slate-600 hover:bg-slate-200/50 hover:text-slate-900'
@@ -123,15 +126,15 @@ export default function Sidebar({
           </nav>
         </div>
 
-        {/* Proyectos Estilo Trello / Notion */}
+        {/* Proyectos Estilo Trello / Notion con opción de borrar */}
         <div>
           <div className="flex items-center justify-between px-2 mb-1.5">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Proyectos
+              Proyectos ({projects.length})
             </span>
             <button
               onClick={onAddProject}
-              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-md transition-colors"
+              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-md transition-colors cursor-pointer"
               title="Crear nuevo proyecto"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -140,23 +143,42 @@ export default function Sidebar({
 
           <div className="space-y-0.5">
             {projects.map((proj) => (
-              <button
+              <div
                 key={proj.id}
-                onClick={() => onSelectProject(proj.id)}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   activeProjectId === proj.id
                     ? 'bg-white text-slate-900 font-semibold shadow-2xs border border-slate-200/80'
                     : 'text-slate-600 hover:bg-slate-200/50 hover:text-slate-900'
                 }`}
               >
-                <div className="flex items-center gap-2 truncate">
+                <button
+                  onClick={() => onSelectProject(proj.id)}
+                  className="flex items-center gap-2 truncate flex-1 text-left cursor-pointer"
+                >
                   <span className={`w-2 h-2 rounded-full ${proj.color}`} />
                   <span className="truncate">{proj.name}</span>
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {/* Botón Borrar Proyecto */}
+                  {projects.length > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteProject(proj.id, proj.name);
+                      }}
+                      className="text-slate-400 hover:text-rose-600 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-rose-50 transition-all cursor-pointer"
+                      title="Borrar proyecto y sus tareas"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+
+                  {activeProjectId === proj.id && (
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                  )}
                 </div>
-                {activeProjectId === proj.id && (
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                )}
-              </button>
+              </div>
             ))}
           </div>
         </div>
@@ -182,7 +204,7 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Footer: Asignador Activo para nuevas tareas */}
+      {/* Footer: Asignador Activo */}
       <div className="p-3 border-t border-slate-200/80 bg-white">
         <div className="text-[10px] text-slate-400 font-semibold mb-1 uppercase tracking-wider">
           Asignando como:

@@ -3,12 +3,13 @@
 import React from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { Task, Priority } from '@/types/kanban';
-import { Calendar, Trash2, FileText, CheckCircle2 } from 'lucide-react';
+import { Calendar, Trash2, FileText } from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
   index: number;
   onDeleteTask: (taskId: string) => void;
+  onClickTask?: (task: Task) => void;
 }
 
 const priorityConfig: Record<Priority, { label: string; badge: string; dot: string }> = {
@@ -34,27 +35,15 @@ const priorityConfig: Record<Priority, { label: string; badge: string; dot: stri
   },
 };
 
-// Paleta de colores suaves para los avatares de responsables
-const avatarColors = [
-  'bg-blue-100 text-blue-700 border-blue-200',
-  'bg-violet-100 text-violet-700 border-violet-200',
-  'bg-emerald-100 text-emerald-700 border-emerald-200',
-  'bg-amber-100 text-amber-700 border-amber-200',
-  'bg-rose-100 text-rose-700 border-rose-200',
-  'bg-indigo-100 text-indigo-700 border-indigo-200',
-];
+const avatarColors: Record<string, string> = {
+  'Daniela Medina': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  'Gustavo Mujica': 'bg-blue-100 text-blue-700 border-blue-200',
+  'Ricardo Pulgar': 'bg-indigo-100 text-indigo-700 border-indigo-200',
+};
 
-function getAvatarColor(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return avatarColors[Math.abs(hash) % avatarColors.length];
-}
-
-export default function TaskCard({ task, index, onDeleteTask }: TaskCardProps) {
+export default function TaskCard({ task, index, onDeleteTask, onClickTask }: TaskCardProps) {
   const priorityInfo = priorityConfig[task.priority] || priorityConfig.medium;
-  const avatarStyle = getAvatarColor(task.assignee || 'General');
+  const avatarStyle = avatarColors[task.assignee || ''] || 'bg-slate-100 text-slate-700 border-slate-200';
 
   return (
     <Draggable draggableId={task.id} index={index}>
@@ -63,10 +52,11 @@ export default function TaskCard({ task, index, onDeleteTask }: TaskCardProps) {
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
+          onClick={() => onClickTask && onClickTask(task)}
           className={`group bg-white border rounded-xl p-4 mb-3 transition-all cursor-grab active:cursor-grabbing ${
             snapshot.isDragging
               ? 'border-indigo-400 shadow-xl ring-2 ring-indigo-400/30 scale-[1.02]'
-              : 'border-slate-200/90 hover:border-slate-300 hover:shadow-sm'
+              : 'border-slate-200/90 hover:border-slate-300 hover:shadow-xs'
           }`}
         >
           {/* Top badges: Priority & Trash */}
@@ -83,7 +73,7 @@ export default function TaskCard({ task, index, onDeleteTask }: TaskCardProps) {
                 e.stopPropagation();
                 onDeleteTask(task.id);
               }}
-              className="text-slate-400 hover:text-rose-600 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-rose-50 transition-all"
+              className="text-slate-400 hover:text-rose-600 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-rose-50 transition-all cursor-pointer"
               title="Eliminar tarea"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -130,9 +120,7 @@ export default function TaskCard({ task, index, onDeleteTask }: TaskCardProps) {
               <div
                 className={`w-6 h-6 rounded-full border flex items-center justify-center text-[10px] font-bold shadow-xs ${avatarStyle}`}
               >
-                {task.assignee && task.assignee !== 'Sin asignar'
-                  ? task.assignee[0].toUpperCase()
-                  : '?'}
+                {task.assignee ? task.assignee[0].toUpperCase() : '?'}
               </div>
               <span className="text-xs text-slate-600 font-medium truncate max-w-[110px]">
                 {task.assignee || 'Sin asignar'}

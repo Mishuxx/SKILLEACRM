@@ -16,6 +16,7 @@ import TeamView from '@/components/TeamView';
 import HistoryView from '@/components/HistoryView';
 import MetricsPanel from '@/components/MetricsPanel';
 import MeetingModal from '@/components/MeetingModal';
+import TaskDetailModal from '@/components/TaskDetailModal';
 import {
   Search,
   Filter,
@@ -24,6 +25,7 @@ import {
   CheckSquare,
   Users,
   History,
+  Trash2,
 } from 'lucide-react';
 
 const TEAM_MEMBERS = [
@@ -96,7 +98,7 @@ const DEFAULT_TASKS: Task[] = [
   },
 ];
 
-const STORAGE_KEY = 'skillea_crm_v5_simple_users';
+const STORAGE_KEY = 'skillea_crm_v6_delete_project';
 const API_KEY_STORAGE = 'skillea_gemini_api_key_v2';
 
 export default function KanbanBoard() {
@@ -106,7 +108,7 @@ export default function KanbanBoard() {
 
   const [columns] = useState<Column[]>(DEFAULT_COLUMNS);
   const [tasks, setTasks] = useState<Task[]>(DEFAULT_TASKS);
-  const [activeAssignee, setActiveAssignee] = useState<string>(TEAM_MEMBERS[2]); // Ricardo Pulgar por defecto
+  const [activeAssignee, setActiveAssignee] = useState<string>(TEAM_MEMBERS[2]);
 
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([
     {
@@ -120,6 +122,7 @@ export default function KanbanBoard() {
     },
   ]);
 
+  const [selectedTaskForModal, setSelectedTaskForModal] = useState<Task | null>(null);
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -203,6 +206,34 @@ export default function KanbanBoard() {
     setActiveProjectId(newProj.id);
   };
 
+  // Función para BORRAR proyectos con confirmación
+  const handleDeleteProject = (projId: string, projName: string) => {
+    if (projects.length <= 1) {
+      alert('Debes tener al menos un proyecto activo en el espacio de trabajo.');
+      return;
+    }
+
+    const confirmed = confirm(
+      `¿Estás seguro de que deseas borrar el proyecto "${projName}"?\nSe eliminarán todas las tareas asociadas a este proyecto.`
+    );
+
+    if (!confirmed) return;
+
+    // Eliminar tareas asociadas al proyecto
+    setTasks((prev) => prev.filter((t) => t.projectId !== projId));
+
+    // Eliminar proyecto
+    const remainingProjects = projects.filter((p) => p.id !== projId);
+    setProjects(remainingProjects);
+
+    // Si el proyecto borrado era el que estaba abierto, cambiar al primero disponible
+    if (activeProjectId === projId) {
+      setActiveProjectId(remainingProjects[0].id);
+    }
+
+    addLog('PROJECT_DELETED', { taskTitle: `Proyecto "${projName}" eliminado` });
+  };
+
   const onDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result;
     if (!destination) return;
@@ -244,6 +275,13 @@ export default function KanbanBoard() {
     if (taskToDelete) {
       addLog('DELETED', { taskTitle: taskToDelete.title });
     }
+  };
+
+  const handleUpdateTask = (updatedTask: Task) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))
+    );
+    addLog('UPDATED', { taskTitle: updatedTask.title });
   };
 
   const handleUpdateTaskColumn = (taskId: string, newColId: string) => {
@@ -298,7 +336,7 @@ export default function KanbanBoard() {
       projectId: activeProjectId,
       title: c.title,
       description: c.description,
-      assignee: c.assignee, // Ya normalizado a Daniela, Gustavo o Ricardo
+      assignee: c.assignee,
       priority: c.priority,
       dueDate: c.dueDate,
       tags: c.tags,
@@ -336,12 +374,13 @@ export default function KanbanBoard() {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
-      {/* Sidebar Notion-like */}
+      {/* Sidebar con opción de borrar proyecto */}
       <Sidebar
         projects={projects}
         activeProjectId={activeProjectId}
         onSelectProject={setActiveProjectId}
         onAddProject={handleAddProject}
+        onDeleteProject={handleDeleteProject}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         teamMembers={TEAM_MEMBERS}
@@ -359,9 +398,20 @@ export default function KanbanBoard() {
             <div className="flex items-center gap-3">
               <span className={`w-3.5 h-3.5 rounded-lg ${currentProject.color} shadow-2xs`} />
               <div>
-                <h1 className="text-xl font-bold tracking-tight text-slate-900 leading-tight">
-                  {currentProject.name}
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-bold tracking-tight text-slate-900 leading-tight">
+                    {currentProject.name}
+                  </h1>
+                  {projects.length > 1 && (
+                    <button
+                      onClick={() => handleDeleteProject(currentProject.id, currentProject.name)}
+                      className="text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
+                      title="Eliminar este proyecto"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-slate-400">
                   {currentProject.description || 'Proyecto activo en SkilleaCRM'}
                 </p>
@@ -432,7 +482,7 @@ export default function KanbanBoard() {
               </button>
             </div>
 
-            {/* Búsqueda y Filtro Rápido por Asignado */}
+            {/* Búsqueda y Filtro Rápido */}
             {(activeTab === 'kanban' || activeTab === 'list') && (
               <div className="flex items-center gap-3">
                 <div className="relative">
@@ -468,7 +518,7 @@ export default function KanbanBoard() {
 
         {/* Scroll Content */}
         <div className="flex-1 overflow-y-auto p-8 max-w-7xl mx-auto w-full">
-          {/* Métricas (Hecho vs Por hacer) */}
+          {/* Métricas */}
           {(activeTab === 'kanban' || activeTab === 'list') && (
             <MetricsPanel
               tasks={projectTasks}
@@ -477,7 +527,7 @@ export default function KanbanBoard() {
             />
           )}
 
-          {/* Kanban */}
+          {/* Kanban con clic para abrir modal de detalle */}
           {activeTab === 'kanban' && (
             <DragDropContext onDragEnd={onDragEnd}>
               <div className="flex items-start gap-6 min-w-max pb-8 overflow-x-auto">
@@ -490,6 +540,7 @@ export default function KanbanBoard() {
                       tasks={columnTasks}
                       onDeleteTask={handleDeleteTask}
                       onQuickAddTask={handleQuickAddTask}
+                      onClickTask={(t) => setSelectedTaskForModal(t)}
                     />
                   );
                 })}
@@ -497,7 +548,7 @@ export default function KanbanBoard() {
             </DragDropContext>
           )}
 
-          {/* Lista */}
+          {/* Lista con clic para editar */}
           {activeTab === 'list' && (
             <TaskListView
               tasks={filteredTasks}
@@ -523,6 +574,17 @@ export default function KanbanBoard() {
           )}
         </div>
       </div>
+
+      {/* Modal de Detalle y Edición de Tarea */}
+      <TaskDetailModal
+        task={selectedTaskForModal}
+        columns={columns}
+        teamMembers={TEAM_MEMBERS}
+        isOpen={!!selectedTaskForModal}
+        onClose={() => setSelectedTaskForModal(null)}
+        onUpdateTask={handleUpdateTask}
+        onDeleteTask={handleDeleteTask}
+      />
 
       {/* Modal para procesar notas y entrevistas */}
       <MeetingModal
