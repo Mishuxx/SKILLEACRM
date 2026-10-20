@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { Task, Column, Priority } from '@/types/kanban';
-import { Calendar, Trash2, FileText } from 'lucide-react';
+import { Calendar, Trash2, FileText, CheckSquare2, AlertCircle } from 'lucide-react';
+import { getDueDateStatus } from '@/utils/dateUtils';
 
 interface TaskListViewProps {
   tasks: Task[];
@@ -11,6 +12,7 @@ interface TaskListViewProps {
   onDeleteTask: (id: string) => void;
   onUpdateTaskColumn: (id: string, colId: string) => void;
   onUpdateTaskAssignee: (id: string, assignee: string) => void;
+  onClickTask?: (task: Task) => void;
 }
 
 const priorityBadges: Record<Priority, { label: string; cls: string }> = {
@@ -27,6 +29,7 @@ export default function TaskListView({
   onDeleteTask,
   onUpdateTaskColumn,
   onUpdateTaskAssignee,
+  onClickTask,
 }: TaskListViewProps) {
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
@@ -39,6 +42,7 @@ export default function TaskListView({
               <th className="px-4 py-3.5">Asignado a</th>
               <th className="px-4 py-3.5">Prioridad</th>
               <th className="px-4 py-3.5">Fecha Límite</th>
+              <th className="px-4 py-3.5">Subtareas</th>
               <th className="px-4 py-3.5">Reunión de Origen</th>
               <th className="px-4 py-3.5 text-right">Acciones</th>
             </tr>
@@ -46,24 +50,34 @@ export default function TaskListView({
           <tbody className="divide-y divide-slate-100">
             {tasks.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-12 text-slate-400">
+                <td colSpan={8} className="text-center py-12 text-slate-400">
                   No hay tareas registradas en este proyecto.
                 </td>
               </tr>
             ) : (
               tasks.map((task) => {
                 const priorityInfo = priorityBadges[task.priority] || priorityBadges.medium;
+                const dueStatus = getDueDateStatus(task.dueDate);
+                const subtasksCount = task.subtasks?.length || 0;
+                const completedSubtasks = task.subtasks?.filter((s) => s.completed).length || 0;
+
                 return (
-                  <tr key={task.id} className="hover:bg-slate-50/80 transition-colors group">
+                  <tr
+                    key={task.id}
+                    onClick={() => onClickTask && onClickTask(task)}
+                    className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
+                  >
                     <td className="px-5 py-3.5 font-medium text-slate-900 max-w-xs">
-                      <div className="font-semibold text-slate-800 leading-snug">{task.title}</div>
+                      <div className="font-semibold text-slate-800 leading-snug group-hover:text-indigo-600 transition-colors">
+                        {task.title}
+                      </div>
                       {task.description && (
                         <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
                           {task.description}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                       <select
                         value={task.columnId}
                         onChange={(e) => onUpdateTaskColumn(task.id, e.target.value)}
@@ -76,7 +90,7 @@ export default function TaskListView({
                         ))}
                       </select>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                       <select
                         value={task.assignee || teamMembers[0]}
                         onChange={(e) => onUpdateTaskAssignee(task.id, e.target.value)}
@@ -97,11 +111,27 @@ export default function TaskListView({
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-slate-500">
-                      {task.dueDate ? (
-                        <div className="flex items-center gap-1 text-[11px]">
-                          <Calendar className="w-3 h-3 text-slate-400" />
-                          <span>{task.dueDate}</span>
-                        </div>
+                      {dueStatus ? (
+                        <span
+                          className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border ${dueStatus.badgeClass}`}
+                        >
+                          {dueStatus.isOverdue && task.columnId !== 'done' ? (
+                            <AlertCircle className="w-3 h-3 text-rose-600" />
+                          ) : (
+                            <Calendar className="w-3 h-3 text-slate-400" />
+                          )}
+                          {dueStatus.label}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-500">
+                      {subtasksCount > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200 font-medium">
+                          <CheckSquare2 className="w-3 h-3 text-indigo-500" />
+                          {completedSubtasks}/{subtasksCount}
+                        </span>
                       ) : (
                         <span className="text-slate-300">—</span>
                       )}
@@ -116,7 +146,7 @@ export default function TaskListView({
                         <span className="text-slate-300">Manual</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-right">
+                    <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => onDeleteTask(task.id)}
                         className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"

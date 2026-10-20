@@ -8,6 +8,7 @@ import {
   Project,
   ActivityLogItem,
   ExtractedTaskCandidate,
+  Priority,
 } from '@/types/kanban';
 import Sidebar from '@/components/Sidebar';
 import KanbanColumn from '@/components/KanbanColumn';
@@ -17,6 +18,7 @@ import HistoryView from '@/components/HistoryView';
 import MetricsPanel from '@/components/MetricsPanel';
 import MeetingModal from '@/components/MeetingModal';
 import TaskDetailModal from '@/components/TaskDetailModal';
+import { exportTasksToCSV } from '@/utils/exportUtils';
 import {
   Search,
   Filter,
@@ -26,6 +28,7 @@ import {
   Users,
   History,
   Trash2,
+  Download,
 } from 'lucide-react';
 
 const TEAM_MEMBERS = [
@@ -67,6 +70,10 @@ const DEFAULT_TASKS: Task[] = [
     dueDate: '2026-10-24',
     columnId: 'in_progress',
     tags: ['Tech', 'Android'],
+    subtasks: [
+      { id: 's1', title: 'Buscar en repositorios del cliente', completed: true },
+      { id: 's2', title: 'Evaluar React Native vs Flutter', completed: false },
+    ],
     meetingReference: 'Entrevista Skillea',
     createdAt: new Date().toISOString(),
   },
@@ -76,10 +83,14 @@ const DEFAULT_TASKS: Task[] = [
     title: 'Coordinar seguimiento comercial y propuesta formal',
     description: 'Preparar términos del servicio y enviar cotización revisada.',
     assignee: 'Daniela Medina',
-    priority: 'medium',
-    dueDate: '2026-10-26',
+    priority: 'urgent',
+    dueDate: '2026-10-20', // Vence hoy
     columnId: 'backlog',
     tags: ['Comercial', 'Seguimiento'],
+    subtasks: [
+      { id: 's3', title: 'Redactar cotización PDF', completed: true },
+      { id: 's4', title: 'Enviar correo de seguimiento', completed: false },
+    ],
     meetingReference: 'Entrevista Skillea',
     createdAt: new Date().toISOString(),
   },
@@ -89,8 +100,8 @@ const DEFAULT_TASKS: Task[] = [
     title: 'Alinear prioridades del sprint con el equipo',
     description: 'Revisión general de avances de la semana.',
     assignee: 'Ricardo Pulgar',
-    priority: 'urgent',
-    dueDate: '2026-10-22',
+    priority: 'medium',
+    dueDate: '2026-10-18', // Vencida
     columnId: 'done',
     tags: ['Liderazgo'],
     meetingReference: 'Sincronización',
@@ -98,7 +109,7 @@ const DEFAULT_TASKS: Task[] = [
   },
 ];
 
-const STORAGE_KEY = 'skillea_crm_v6_delete_project';
+const STORAGE_KEY = 'skillea_crm_v7_complete';
 const API_KEY_STORAGE = 'skillea_gemini_api_key_v2';
 
 export default function KanbanBoard() {
@@ -127,6 +138,7 @@ export default function KanbanBoard() {
   const [apiKey, setApiKey] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState<string>('all');
+  const [selectedPriorityFilter, setSelectedPriorityFilter] = useState<string>('all');
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -206,7 +218,6 @@ export default function KanbanBoard() {
     setActiveProjectId(newProj.id);
   };
 
-  // Función para BORRAR proyectos con confirmación
   const handleDeleteProject = (projId: string, projName: string) => {
     if (projects.length <= 1) {
       alert('Debes tener al menos un proyecto activo en el espacio de trabajo.');
@@ -219,14 +230,10 @@ export default function KanbanBoard() {
 
     if (!confirmed) return;
 
-    // Eliminar tareas asociadas al proyecto
     setTasks((prev) => prev.filter((t) => t.projectId !== projId));
-
-    // Eliminar proyecto
     const remainingProjects = projects.filter((p) => p.id !== projId);
     setProjects(remainingProjects);
 
-    // Si el proyecto borrado era el que estaba abierto, cambiar al primero disponible
     if (activeProjectId === projId) {
       setActiveProjectId(remainingProjects[0].id);
     }
@@ -321,6 +328,7 @@ export default function KanbanBoard() {
       assignee: activeAssignee,
       createdAt: new Date().toISOString(),
       tags: ['Manual'],
+      subtasks: [],
     };
 
     setTasks((prev) => [newTask, ...prev]);
@@ -340,6 +348,11 @@ export default function KanbanBoard() {
       priority: c.priority,
       dueDate: c.dueDate,
       tags: c.tags,
+      subtasks: (c.subtasks || []).map((sub, idx) => ({
+        id: `sub-${Date.now()}-${idx}`,
+        title: sub,
+        completed: false,
+      })),
       meetingReference: meetingTitle,
       columnId: 'backlog',
       createdAt: new Date().toISOString(),
@@ -361,8 +374,15 @@ export default function KanbanBoard() {
     const matchesAssignee =
       selectedAssigneeFilter === 'all' || task.assignee === selectedAssigneeFilter;
 
-    return matchesSearch && matchesAssignee;
+    const matchesPriority =
+      selectedPriorityFilter === 'all' || task.priority === selectedPriorityFilter;
+
+    return matchesSearch && matchesAssignee && matchesPriority;
   });
+
+  const handleExportCSV = () => {
+    exportTasksToCSV(projectTasks, currentProject.name);
+  };
 
   if (!isLoaded) {
     return (
@@ -374,7 +394,7 @@ export default function KanbanBoard() {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
-      {/* Sidebar con opción de borrar proyecto */}
+      {/* Sidebar Notion-like */}
       <Sidebar
         projects={projects}
         activeProjectId={activeProjectId}
@@ -418,8 +438,17 @@ export default function KanbanBoard() {
               </div>
             </div>
 
-            {/* Acción Principal */}
-            <div className="flex items-center gap-3">
+            {/* Acciones Principales: Exportar CSV + Cargar Notas */}
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={handleExportCSV}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer"
+                title="Descargar reporte en Excel / CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                Exportar CSV
+              </button>
+
               <button
                 onClick={() => setIsMeetingModalOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
@@ -482,9 +511,9 @@ export default function KanbanBoard() {
               </button>
             </div>
 
-            {/* Búsqueda y Filtro Rápido */}
+            {/* Búsqueda y Filtros */}
             {(activeTab === 'kanban' || activeTab === 'list') && (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
@@ -496,19 +525,34 @@ export default function KanbanBoard() {
                   />
                 </div>
 
-                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg text-xs text-slate-600">
-                  <Filter className="w-3 h-3 text-slate-400" />
+                {/* Filtro Asignado */}
+                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg text-xs text-slate-600">
                   <select
                     value={selectedAssigneeFilter}
                     onChange={(e) => setSelectedAssigneeFilter(e.target.value)}
                     className="bg-transparent text-slate-700 font-medium focus:outline-none text-xs cursor-pointer"
                   >
-                    <option value="all">Todos los asignados</option>
+                    <option value="all">Todo el equipo</option>
                     {TEAM_MEMBERS.map((m) => (
                       <option key={m} value={m}>
                         {m}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                {/* Filtro Prioridad */}
+                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg text-xs text-slate-600">
+                  <select
+                    value={selectedPriorityFilter}
+                    onChange={(e) => setSelectedPriorityFilter(e.target.value)}
+                    className="bg-transparent text-slate-700 font-medium focus:outline-none text-xs cursor-pointer"
+                  >
+                    <option value="all">Cualquier prioridad</option>
+                    <option value="urgent">Urgente</option>
+                    <option value="high">Alta</option>
+                    <option value="medium">Media</option>
+                    <option value="low">Baja</option>
                   </select>
                 </div>
               </div>
@@ -527,7 +571,7 @@ export default function KanbanBoard() {
             />
           )}
 
-          {/* Kanban con clic para abrir modal de detalle */}
+          {/* Kanban */}
           {activeTab === 'kanban' && (
             <DragDropContext onDragEnd={onDragEnd}>
               <div className="flex items-start gap-6 min-w-max pb-8 overflow-x-auto">
@@ -548,7 +592,7 @@ export default function KanbanBoard() {
             </DragDropContext>
           )}
 
-          {/* Lista con clic para editar */}
+          {/* Lista */}
           {activeTab === 'list' && (
             <TaskListView
               tasks={filteredTasks}
@@ -557,6 +601,7 @@ export default function KanbanBoard() {
               onDeleteTask={handleDeleteTask}
               onUpdateTaskColumn={handleUpdateTaskColumn}
               onUpdateTaskAssignee={handleUpdateTaskAssignee}
+              onClickTask={(t) => setSelectedTaskForModal(t)}
             />
           )}
 
@@ -575,7 +620,7 @@ export default function KanbanBoard() {
         </div>
       </div>
 
-      {/* Modal de Detalle y Edición de Tarea */}
+      {/* Modal de Detalle con Subtareas */}
       <TaskDetailModal
         task={selectedTaskForModal}
         columns={columns}

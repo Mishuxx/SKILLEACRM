@@ -8,6 +8,12 @@ export interface UserProfile {
   role: string;
 }
 
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -40,6 +46,7 @@ export interface Task {
   dueDate?: string;
   meetingReference?: string;
   tags?: string[];
+  subtasks?: Subtask[];
   columnId: string;
   createdAt: string;
   completedAt?: string;
@@ -59,5 +66,6 @@ export interface ExtractedTaskCandidate {
   priority: Priority;
   dueDate?: string;
   tags: string[];
+  subtasks?: string[];
   selected: boolean;
 }

@@ -3,7 +3,8 @@
 import React from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { Task, Priority } from '@/types/kanban';
-import { Calendar, Trash2, FileText } from 'lucide-react';
+import { Calendar, Trash2, FileText, CheckSquare2, AlertCircle } from 'lucide-react';
+import { getDueDateStatus } from '@/utils/dateUtils';
 
 interface TaskCardProps {
   task: Task;
@@ -44,6 +45,10 @@ const avatarColors: Record<string, string> = {
 export default function TaskCard({ task, index, onDeleteTask, onClickTask }: TaskCardProps) {
   const priorityInfo = priorityConfig[task.priority] || priorityConfig.medium;
   const avatarStyle = avatarColors[task.assignee || ''] || 'bg-slate-100 text-slate-700 border-slate-200';
+  const dueStatus = getDueDateStatus(task.dueDate);
+
+  const subtasksCount = task.subtasks?.length || 0;
+  const completedSubtasks = task.subtasks?.filter((s) => s.completed).length || 0;
 
   return (
     <Draggable draggableId={task.id} index={index}>
@@ -57,7 +62,7 @@ export default function TaskCard({ task, index, onDeleteTask, onClickTask }: Tas
             snapshot.isDragging
               ? 'border-indigo-400 shadow-xl ring-2 ring-indigo-400/30 scale-[1.02]'
               : 'border-slate-200/90 hover:border-slate-300 hover:shadow-xs'
-          }`}
+          } ${dueStatus?.isOverdue && task.columnId !== 'done' ? 'border-rose-300/80 ring-1 ring-rose-200/50' : ''}`}
         >
           {/* Top badges: Priority & Trash */}
           <div className="flex items-center justify-between gap-2 mb-2">
@@ -92,6 +97,27 @@ export default function TaskCard({ task, index, onDeleteTask, onClickTask }: Tas
             </p>
           )}
 
+          {/* Barra de progreso de subtareas si existen */}
+          {subtasksCount > 0 && (
+            <div className="mb-3 bg-slate-50 border border-slate-200/70 p-2 rounded-lg">
+              <div className="flex items-center justify-between text-[10px] font-semibold text-slate-600 mb-1">
+                <span className="flex items-center gap-1">
+                  <CheckSquare2 className="w-3 h-3 text-indigo-500" />
+                  Subtareas
+                </span>
+                <span>
+                  {completedSubtasks}/{subtasksCount}
+                </span>
+              </div>
+              <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-indigo-600 h-full transition-all"
+                  style={{ width: `${(completedSubtasks / subtasksCount) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Referencia a la reunión de origen */}
           {task.meetingReference && (
             <div className="flex items-center gap-1.5 text-[11px] text-indigo-700 bg-indigo-50/80 px-2.5 py-1 rounded-md border border-indigo-100/90 mb-3 max-w-fit font-medium">
@@ -114,7 +140,7 @@ export default function TaskCard({ task, index, onDeleteTask, onClickTask }: Tas
             </div>
           )}
 
-          {/* Footer: Responsable & Fecha */}
+          {/* Footer: Responsable & Fecha con Alerta de Vencimiento */}
           <div className="flex items-center justify-between text-xs pt-2.5 border-t border-slate-100">
             <div className="flex items-center gap-1.5">
               <div
@@ -127,10 +153,17 @@ export default function TaskCard({ task, index, onDeleteTask, onClickTask }: Tas
               </span>
             </div>
 
-            {task.dueDate && (
-              <div className="flex items-center gap-1 text-[11px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/70">
-                <Calendar className="w-3 h-3 text-slate-400" />
-                <span>{task.dueDate}</span>
+            {dueStatus && (
+              <div
+                className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border ${dueStatus.badgeClass}`}
+                title={task.dueDate}
+              >
+                {dueStatus.isOverdue && task.columnId !== 'done' ? (
+                  <AlertCircle className="w-3 h-3 text-rose-600" />
+                ) : (
+                  <Calendar className="w-3 h-3 text-slate-400" />
+                )}
+                <span>{dueStatus.label}</span>
               </div>
             )}
           </div>

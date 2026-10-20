@@ -6,8 +6,6 @@ interface AnalyzeRequest {
   apiKey?: string;
 }
 
-const ALLOWED_MEMBERS = ['Daniela Medina', 'Gustavo Mujica', 'Ricardo Pulgar'];
-
 export async function POST(req: Request) {
   try {
     const body: AnalyzeRequest = await req.json();
@@ -31,19 +29,21 @@ export async function POST(req: Request) {
     const promptText = `
 Eres un asistente experto en gestión ágil de proyectos y análisis de reuniones para SkilleaCRM.
 Los únicos 3 miembros del equipo a quienes se les pueden asignar tareas son:
-1. "Daniela Medina" (o "Daniela")
-2. "Gustavo Mujica" (o "Gustavo")
-3. "Ricardo Pulgar" (o "Ricardo")
+1. "Daniela Medina"
+2. "Gustavo Mujica"
+3. "Ricardo Pulgar"
 
-Analiza la siguiente transcripción o minuta y extrae TODAS las tareas accionables (Action Items), acuerdos y compromisos o investigaciones mencionadas.
+Analiza la siguiente transcripción o minuta y extrae TODAS las tareas accionables (Action Items), acuerdos y compromisos.
+Para cada tarea, si identificas pasos concretos o requisitos secundarios, inclúyelos en el campo "subtasks" como una lista de strings breves.
 
 Reglas de salida:
 - "title": Breve y comenzando con un verbo en infinitivo (ej: "Investigar disponibilidad de la aplicación para Android").
 - "description": Contexto relevante de lo conversado en la reunión.
-- "assignee": DEBE ser exactamente uno de: "Daniela Medina", "Gustavo Mujica", o "Ricardo Pulgar". Si se menciona a alguien más o no es claro, asígnalo a "Ricardo Pulgar" por defecto.
+- "assignee": Exactamente uno de: "Daniela Medina", "Gustavo Mujica", o "Ricardo Pulgar".
 - "priority": "low" | "medium" | "high" | "urgent".
-- "dueDate": Fecha en YYYY-MM-DD o null si no se mencionó.
+- "dueDate": Fecha en YYYY-MM-DD o null.
 - "tags": Lista de 1 a 3 tags breves.
+- "subtasks": Lista opcional de 1 a 4 subtareas/pasos concretos en formato texto (ej: ["Buscar en Play Store", "Consultar documentación"]).
 
 Devuelve ÚNICAMENTE un array JSON válido, sin bloques de código ni texto adicional:
 [
@@ -53,7 +53,8 @@ Devuelve ÚNICAMENTE un array JSON válido, sin bloques de código ni texto adic
     "assignee": "Daniela Medina" | "Gustavo Mujica" | "Ricardo Pulgar",
     "priority": "low" | "medium" | "high" | "urgent",
     "dueDate": null,
-    "tags": ["..."]
+    "tags": ["..."],
+    "subtasks": ["..."]
   }
 ]
 
@@ -111,7 +112,6 @@ ${notes}
       );
     }
 
-    // Parse JSON
     let tasks: any[] = [];
     try {
       let jsonString = responseData.trim();
@@ -131,7 +131,6 @@ ${notes}
       );
     }
 
-    // Normalizar responsables a los 3 exactos
     const normalizeAssignee = (raw: string) => {
       const lower = (raw || '').toLowerCase();
       if (lower.includes('daniela')) return 'Daniela Medina';
@@ -153,6 +152,7 @@ ${notes}
         priority: ['low', 'medium', 'high', 'urgent'].includes(t.priority?.toLowerCase()) ? t.priority.toLowerCase() : 'medium',
         dueDate: t.dueDate || '',
         tags: Array.isArray(t.tags) ? t.tags : [],
+        subtasks: Array.isArray(t.subtasks) ? t.subtasks : [],
         selected: true,
       })),
     });

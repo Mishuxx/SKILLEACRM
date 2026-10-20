@@ -1,18 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Task, Priority } from '@/types/kanban';
+import { Task, Priority, Subtask } from '@/types/kanban';
 import {
   Calendar,
-  Clock,
-  User,
   Tag,
   FileText,
   Trash2,
   CheckCircle2,
   X,
-  AlertTriangle,
+  Plus,
+  CheckSquare2,
+  Square,
 } from 'lucide-react';
+import { getDueDateStatus } from '@/utils/dateUtils';
 
 interface TaskDetailModalProps {
   task: Task | null;
@@ -42,6 +43,31 @@ export default function TaskDetailModal({
   const [columnId, setColumnId] = useState(task.columnId);
   const [dueDate, setDueDate] = useState(task.dueDate || '');
   const [tagInput, setTagInput] = useState((task.tags || []).join(', '));
+  const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks || []);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+
+  const dueStatus = getDueDateStatus(dueDate);
+
+  const handleAddSubtask = () => {
+    if (!newSubtaskTitle.trim()) return;
+    const newSub: Subtask = {
+      id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      title: newSubtaskTitle.trim(),
+      completed: false,
+    };
+    setSubtasks([...subtasks, newSub]);
+    setNewSubtaskTitle('');
+  };
+
+  const handleToggleSubtask = (id: string) => {
+    setSubtasks(
+      subtasks.map((s) => (s.id === id ? { ...s, completed: !s.completed } : s))
+    );
+  };
+
+  const handleDeleteSubtask = (id: string) => {
+    setSubtasks(subtasks.filter((s) => s.id !== id));
+  };
 
   const handleSave = () => {
     const updatedTags = tagInput
@@ -58,6 +84,7 @@ export default function TaskDetailModal({
       columnId,
       dueDate: dueDate || undefined,
       tags: updatedTags,
+      subtasks,
     });
     onClose();
   };
@@ -69,17 +96,19 @@ export default function TaskDetailModal({
     }
   };
 
+  const completedCount = subtasks.filter((s) => s.completed).length;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-2xs p-4 overflow-y-auto">
-      <div className="bg-white border border-slate-200 text-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-white border border-slate-200 text-slate-800 rounded-3xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Detalle de Tarea
+              Detalle & Subtareas
             </span>
             {task.meetingReference && (
-              <span className="text-[11px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-100 font-semibold flex items-center gap-1">
+              <span className="text-[11px] bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-md border border-indigo-100 font-semibold flex items-center gap-1">
                 <FileText className="w-3 h-3 text-indigo-500" />
                 {task.meetingReference}
               </span>
@@ -94,7 +123,7 @@ export default function TaskDetailModal({
         </div>
 
         {/* Formulario */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+        <div className="p-6 overflow-y-auto flex-1 space-y-5">
           {/* Título */}
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-700">Título de la tarea</label>
@@ -156,9 +185,16 @@ export default function TaskDetailModal({
           {/* Fecha Límite y Tags */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" /> Fecha límite
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" /> Fecha límite
+                </label>
+                {dueStatus && (
+                  <span className={`text-[10px] px-2 py-0.2 rounded font-semibold border ${dueStatus.badgeClass}`}>
+                    {dueStatus.label}
+                  </span>
+                )}
+              </div>
               <input
                 type="date"
                 value={dueDate}
@@ -181,11 +217,83 @@ export default function TaskDetailModal({
             </div>
           </div>
 
+          {/* Checklist / Subtareas */}
+          <div className="space-y-2 pt-1 border-t border-slate-100">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                <CheckSquare2 className="w-4 h-4 text-indigo-600" />
+                Checklist / Subtareas ({completedCount}/{subtasks.length})
+              </label>
+            </div>
+
+            {/* Input para agregar subtarea */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Añadir un paso o subtarea..."
+                value={newSubtaskTitle}
+                onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddSubtask();
+                  }
+                }}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <button
+                type="button"
+                onClick={handleAddSubtask}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Añadir
+              </button>
+            </div>
+
+            {/* Lista de subtareas */}
+            <div className="space-y-1.5 mt-2 max-h-36 overflow-y-auto">
+              {subtasks.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between p-2 rounded-lg bg-slate-50/80 border border-slate-200/60 group"
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSubtask(s.id)}
+                    className="flex items-center gap-2 text-xs text-left flex-1 cursor-pointer"
+                  >
+                    {s.completed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    ) : (
+                      <Square className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                    )}
+                    <span
+                      className={`truncate ${
+                        s.completed ? 'line-through text-slate-400' : 'text-slate-800'
+                      }`}
+                    >
+                      {s.title}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSubtask(s.id)}
+                    className="text-slate-400 hover:text-rose-600 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Descripción */}
-          <div className="space-y-1">
+          <div className="space-y-1 pt-1 border-t border-slate-100">
             <label className="text-xs font-semibold text-slate-700">Descripción & Notas</label>
             <textarea
-              rows={5}
+              rows={4}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Detalles técnicos, acuerdos de la reunión, enlaces relevantes..."
